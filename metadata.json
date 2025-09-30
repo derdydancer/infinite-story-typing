@@ -1,0 +1,5 @@
+{
+  "name": "AI Story Typer",
+  "description": "An infinite speed typing game where the story is generated piece by piece by AI. Any typos or mistakes you make are creatively incorporated into the continuation of the story.",
+  "requestFramePermissions": []
+}
