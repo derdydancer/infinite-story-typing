@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import type { ImageEntity } from '../types';
 
 const API_KEY = process.env.API_KEY;
@@ -125,27 +125,47 @@ Generate the image prompt. Return only the prompt string.`;
     }
 }
 
+// A 1x1 transparent PNG to use as a base for image generation with the editing model.
+const BLANK_IMAGE_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
 export const generateImage = async (prompt: string): Promise<string | null> => {
-    console.log('Requesting image generation for prompt:', prompt);
+    console.log('Requesting image generation with flash model for prompt:', prompt);
     try {
-        const response = await ai.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: prompt,
+        // We use the image editing model to "generate" an image by giving it a blank canvas
+        // and a detailed prompt describing what to create. This is a creative way to use
+        // a "free tier" model for image creation.
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image-preview',
+            contents: {
+                parts: [
+                    {
+                        inlineData: {
+                            data: BLANK_IMAGE_BASE64,
+                            mimeType: 'image/png',
+                        },
+                    },
+                    {
+                        text: `Create this scene from scratch on this blank canvas: ${prompt}`,
+                    },
+                ],
+            },
             config: {
-              numberOfImages: 1,
-              outputMimeType: 'image/jpeg',
-              aspectRatio: '16:9',
+                responseModalities: [Modality.IMAGE, Modality.TEXT],
             },
         });
 
-        if (response.generatedImages && response.generatedImages.length > 0) {
-            const base64ImageBytes = response.generatedImages[0].image.imageBytes;
-            console.log('Image generated successfully.');
-            return `data:image/jpeg;base64,${base64ImageBytes}`;
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData) {
+                const base64ImageBytes: string = part.inlineData.data;
+                const mimeType = part.inlineData.mimeType;
+                console.log('Image generated successfully via editing model.');
+                return `data:${mimeType};base64,${base64ImageBytes}`;
+            }
         }
+        console.warn('Image generation call succeeded but no image part was found in response.');
         return null;
     } catch (error) {
-        console.error('Image generation failed:', error);
+        console.error('Image generation with flash model failed:', error);
         return null;
     }
 };
